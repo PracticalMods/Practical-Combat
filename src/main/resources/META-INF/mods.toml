@@ -1,0 +1,30 @@
+# See https://mcforge.readthedocs.io/en/1.16.x/gettingstarted/structuring/
+modLoader="javafml" 
+loaderVersion="[36,)"
+license="GNU GPLv3"
+issueTrackerURL="https://github.com/TheWarmFuzzy/Practical-Combat/issues"
+
+[[mods]]
+    modId="practicalcombat" 
+    version="0.0.1.0"
+    displayName="Practical Combat"
+    #updateJSONURL="https://change.me.example.invalid/updates.json"
+    #displayURL="https://change.me.to.your.mods.homepage.example.invalid/"
+    #logoFile="practicalcombat.png"
+    credits="Thanks to all the mod developers that have put in so much effort over the years!" #optional
+    authors="TheWarmFuzzy"
+    description='''A mod to upgrade Minecraft's combat and related system.'''
+
+    [[dependencies.practicalcombat]] 
+        modId="forge"
+        mandatory=true 
+        versionRange="[36,)"
+        ordering="NONE"
+        side="BOTH"
+
+    [[dependencies.practicalbiomes]]
+        modId="minecraft"
+        mandatory=true
+        versionRange="[1.16.5,1.17)"
+        ordering="NONE"
+        side="BOTH"
