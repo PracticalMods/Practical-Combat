@@ -6,7 +6,7 @@ issueTrackerURL="https://github.com/TheWarmFuzzy/Practical-Combat/issues"
 
 [[mods]]
     modId="practicalcombat" 
-    version="0.0.1.0"
+    version="0.0.2.0"
     displayName="Practical Combat"
     #updateJSONURL="https://change.me.example.invalid/updates.json"
     #displayURL="https://change.me.to.your.mods.homepage.example.invalid/"

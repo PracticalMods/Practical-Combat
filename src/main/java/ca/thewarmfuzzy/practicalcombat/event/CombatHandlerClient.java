@@ -17,6 +17,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.Map;
 
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class CombatHandlerClient {
@@ -24,7 +26,7 @@ public class CombatHandlerClient {
     /**
      * The maximum number of ticks for a quick key event.
      */
-    public static final Integer MAX_KEY_TICK_DURATION = 3;
+    public static final Integer MAX_KEY_TICK_DURATION = 4;
 
     /**
      * The minimum food level required to hop.
@@ -32,9 +34,24 @@ public class CombatHandlerClient {
     public static final Integer MIN_HOP_FOOD_LEVEL = 6;
 
     /**
+     * The minimum food level required to hop.
+     */
+    public static final Boolean HOP_ON_KEY_DOWN = true;
+
+    /**
      * The id of the last recorded key press.
      */
     private static Integer lastKey = 0;
+
+    /**
+     * The number of time a key has been pressed and released consecutively within MAX_KEY_TICK_DURATION.
+     */
+    private static Hashtable<Integer, Integer> keyReleaseCounts = new Hashtable<Integer, Integer>();
+
+    /**
+     * The last keyReleaseCount that an action has been handled for.
+     */
+    private static Hashtable<Integer, Integer> keyActionValues = new Hashtable<Integer, Integer>();
 
     /**
      * The current state of watched keys.
@@ -46,6 +63,7 @@ public class CombatHandlerClient {
      */
     static Hashtable<Integer, Integer> keyStateDurations = new Hashtable<Integer, Integer>();
 
+
     /**
      * The available hop directions.
      */
@@ -56,17 +74,14 @@ public class CombatHandlerClient {
     }
 
     /**
-     * The available key states. Probably should have done a mod (%) on DOWN rather than having DOUBLE_TAP/DOUBLE_TAP_COOL_DOWN but that's what learning is for.
+     * The available key states.
      */
     enum KeyState {
-        IDLE,
         DOWN,
-        UP,
-        DOUBLE_TAP,
-        DOUBLE_TAP_COOL_DOWN
+        UP
     }
 
-    @SubscribeEvent(priority = EventPriority.NORMAL, receiveCanceled = true)
+    @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
     public static void onKeyPress(InputEvent.KeyInputEvent event) {
         lastKey = event.getKey();
     }
@@ -88,11 +103,6 @@ public class CombatHandlerClient {
         watchKey(gameSettings.keyBindRight);
 
     }
-
-//    @SubscribeEvent(priority = EventPriority.NORMAL, receiveCanceled = true)
-//    public static void onClientTickEvent( event) {
-//
-//    }
 
     /**
      * Triggered when a watch keybinding gets pressed twice in quick succession.
@@ -125,36 +135,69 @@ public class CombatHandlerClient {
         //Initialize
         Integer keyCode = keyBinding.getKey().getKeyCode();
         final KeyState initialState = keyStates.get(keyCode);
-        KeyState state = keyStates.get(keyCode);
-        Integer keyStateDuration = keyStateDurations.get(keyCode);
-        if (keyStateDuration == null) keyStateDuration = 0;
-        if (keyBinding.getKey().getKeyCode() != lastKey) state = KeyState.IDLE;
+        KeyState state = null != keyStates.get(keyCode) ? keyStates.get(keyCode) : KeyState.UP;
+        Integer keyStateDuration = null != keyStateDurations.get(keyCode) ? keyStateDurations.get(keyCode) : 0;
+        Integer keyReleaseCount = null != keyReleaseCounts.get(keyCode) ? keyReleaseCounts.get(keyCode) : 0;
+        Integer keyActionValue = null != keyActionValues.get(keyCode) ? keyActionValues.get(keyCode) : 0;
 
         //Manage key states
         if (keyBinding.isKeyDown()) {
             if (state == KeyState.UP) {
-                if (keyStateDuration <= MAX_KEY_TICK_DURATION) state = KeyState.DOUBLE_TAP;
-                else state = KeyState.DOWN;
-            } else if (state != KeyState.DOUBLE_TAP && state != KeyState.DOUBLE_TAP_COOL_DOWN) state = KeyState.DOWN;
+                if (keyStateDuration >= MAX_KEY_TICK_DURATION || keyBinding.getKey().getKeyCode() != lastKey) {
+                    keyReleaseCount = 1;
+                    keyActionValue = 0;
+                    PracticalCombat.LOGGER.info(String.format("Resetting keyReleaseCount: %s", "Key UP tick duration"));
+                } else {
+                    keyReleaseCount++;
+                }
+                keyStateDuration = 0;
+            }
+            state = KeyState.DOWN;
         } else {
             if (state == KeyState.DOWN) {
-                if (keyStateDuration <= MAX_KEY_TICK_DURATION) state = KeyState.UP;
-                else state = KeyState.IDLE;
+                if (keyStateDuration >= MAX_KEY_TICK_DURATION || keyBinding.getKey().getKeyCode() != lastKey) {
+                    keyReleaseCount = 0;
+                    keyActionValue = 0;
+                    PracticalCombat.LOGGER.info(String.format("Resetting keyReleaseCount: %s", "Key DOWN tick duration"));
+                } else {
+                    keyReleaseCount++;
+                }
+                keyStateDuration = 0;
             }
-            if (state == KeyState.DOUBLE_TAP_COOL_DOWN) state = KeyState.IDLE;
+            state = KeyState.UP;
         }
 
-        //If double tap has been achieved
-        if (state == KeyState.DOUBLE_TAP) {
-            onDoubleTap(keyBinding);
-            state = KeyState.DOUBLE_TAP_COOL_DOWN;
+        //If an action can be performed
+        if (keyBinding.getKey().getKeyCode() == lastKey && keyReleaseCount > keyActionValue) {
+
+            Integer actionModifier = HOP_ON_KEY_DOWN ? 1 : 0;
+            //Handle actions here
+            if ((keyReleaseCount + actionModifier) % 4 == 0) {
+                onDoubleTap(keyBinding);
+            }
+
+            //Update the action value
+            keyActionValue = keyReleaseCount;
+
         }
 
         //Save states
         keyStates.put(keyCode, state);
         if (state != initialState) {
-            keyStateDurations.put(keyCode, 0);
-//            PracticalBiomes.LOGGER.info(String.format("Key State (%o): %s", keyCode, state));
+
+            //Max out other key timers
+            Iterator i = keyStateDurations.entrySet().iterator();
+            while (i.hasNext()) {
+                Map.Entry pair = (Map.Entry) i.next();
+                if (keyCode != pair.getKey()) {
+                    keyStateDurations.put((Integer) pair.getKey(), MAX_KEY_TICK_DURATION + 1);
+                }
+            }
+
+            keyStateDurations.put(keyCode, keyStateDuration);
+            keyReleaseCounts.put(keyCode, keyReleaseCount);
+            keyActionValues.put(keyCode, keyActionValue);
+            PracticalCombat.LOGGER.info(String.format("Key State (%o): %s %o", keyCode, state, keyReleaseCount));
         } else {
             Integer tempDuration = Math.min(keyStateDuration + 1, MAX_KEY_TICK_DURATION + 1);
             keyStateDurations.put(keyCode, tempDuration);
@@ -215,7 +258,7 @@ public class CombatHandlerClient {
         }
 
         //Hop
-//        PracticalCombat.LOGGER.info(String.format("Hop %s: Speed(%f)", direction, horizontalSpeed));
+        PracticalCombat.LOGGER.info(String.format("Hop %s: Speed(%f)", direction, horizontalSpeed));
         player.setVelocity(hopVelocity.x, hopVelocity.y, hopVelocity.z);
         if (player.isSprinting()) {
             player.addExhaustion(0.25f);

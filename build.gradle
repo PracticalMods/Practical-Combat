@@ -13,7 +13,7 @@ apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
 def mc_version = "1.16.5"
-def mod_version = "0.0.1.0"
+def mod_version = "0.0.2.0"
 version = "${mc_version}-${mod_version}"
 group = 'ca.thewarmfuzzy.practicalcombat' // http://maven.apache.org/guides/mini/guide-naming-conventions.html
 archivesBaseName = 'practicalcombat'
